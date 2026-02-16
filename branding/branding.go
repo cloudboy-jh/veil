@@ -2,39 +2,10 @@ package branding
 
 import "github.com/charmbracelet/lipgloss"
 
-const Wordmark = `
-●           ●   ●●●●●●●   ●●●●●   ●
- ●         ●    ●           ●     ●
-  ●       ●     ●           ●     ●
-   ●     ●      ●●●●●       ●     ●
-    ●   ●       ●           ●     ●
-     ● ●        ●           ●     ●
-      ●         ●●●●●●●   ●●●●●   ●●●●●●●
-`
-
-const WordmarkCompact = `
-●       ●  ●●●●●  ●●●  ●
- ●     ●   ●       ●   ●
-  ●   ●    ●●●●    ●   ●
-   ● ●     ●       ●   ●
-    ●      ●●●●●  ●●●  ●●●●●
-`
-
-const LogoFull = `
-    ● ● ●
-   ●     ●
-  ●       ●
-  ●       ●      ●           ●   ●●●●●●●   ●●●●●   ●
-  ●       ●       ●         ●    ●           ●     ●
-   ●     ●         ●       ●     ●           ●     ●
-    ● ● ●           ●     ●      ●●●●●       ●     ●
-     ● ●             ●   ●       ●           ●     ●
-     ● ●              ● ●        ●           ●     ●
-     ● ● ● ●           ●         ●●●●●●●   ●●●●●   ●●●●●●●
-     ● ●
-     ● ● ● ●
-     ● ●
-`
+const WordmarkSmall = `           _ __
+ _  _____ (_) /
+| |/ / -_) / /
+|___/\__/_/_/`
 
 var (
 	Violet   = lipgloss.Color("#8B5CF6")
@@ -56,13 +27,7 @@ var (
 )
 
 func Render() string {
-	logo := LogoStyle.Render(WordmarkCompact)
-	tagline := TaglineStyle.Render("  Encrypted secrets for developers")
-	return logo + "\n" + tagline + "\n"
-}
-
-func RenderFull() string {
-	logo := LogoStyle.Render(LogoFull)
-	tagline := TaglineStyle.Render("  Encrypted secrets for developers")
+	logo := LogoStyle.Render(WordmarkSmall)
+	tagline := TaglineStyle.Render("encrypted secrets for developers")
 	return logo + "\n" + tagline + "\n"
 }

@@ -36,6 +36,7 @@ const (
 	modeFilter
 	modeImportPath
 	modeExportPath
+	modePageSelect
 )
 
 type projectItem struct {
@@ -49,48 +50,46 @@ func (p projectItem) Title() string       { return fmt.Sprintf("%s (%d)", p.name
 func (p projectItem) Description() string { return p.path }
 
 type keyMap struct {
-	Quit     key.Binding
-	Home     key.Binding
-	Project  key.Binding
-	Settings key.Binding
-	Add      key.Binding
-	Edit     key.Binding
-	Import   key.Binding
-	Export   key.Binding
-	Delete   key.Binding
-	Reveal   key.Binding
-	Filter   key.Binding
-	Sync     key.Binding
-	Back     key.Binding
-	Confirm  key.Binding
+	Quit    key.Binding
+	Pages   key.Binding
+	Add     key.Binding
+	Edit    key.Binding
+	Import  key.Binding
+	Export  key.Binding
+	Delete  key.Binding
+	Reveal  key.Binding
+	Filter  key.Binding
+	Sync    key.Binding
+	Back    key.Binding
+	Confirm key.Binding
+	List    key.Binding
 }
 
 func defaultKeyMap() keyMap {
 	return keyMap{
-		Quit:     key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
-		Home:     key.NewBinding(key.WithKeys("1", "h"), key.WithHelp("1", "home")),
-		Project:  key.NewBinding(key.WithKeys("2", "p"), key.WithHelp("2", "project")),
-		Settings: key.NewBinding(key.WithKeys("3", "s"), key.WithHelp("3", "settings")),
-		Add:      key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add")),
-		Edit:     key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit")),
-		Import:   key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "import")),
-		Export:   key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "export")),
-		Delete:   key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete")),
-		Reveal:   key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "reveal")),
-		Filter:   key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
-		Sync:     key.NewBinding(key.WithKeys("S"), key.WithHelp("S", "sync")),
-		Back:     key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
-		Confirm:  key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "confirm")),
+		Quit:    key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
+		Pages:   key.NewBinding(key.WithKeys("P"), key.WithHelp("P", "pages")),
+		Add:     key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add")),
+		Edit:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit")),
+		Import:  key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "import")),
+		Export:  key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "export")),
+		Delete:  key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete")),
+		Reveal:  key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "reveal")),
+		Filter:  key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
+		Sync:    key.NewBinding(key.WithKeys("S"), key.WithHelp("S", "sync")),
+		Back:    key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
+		Confirm: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "confirm")),
+		List:    key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "list")),
 	}
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Home, k.Project, k.Settings, k.Add, k.Delete, k.Reveal, k.Filter, k.Quit}
+	return []key.Binding{k.Pages, k.Add, k.Delete, k.Reveal, k.Filter, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Home, k.Project, k.Settings, k.Sync},
+		{k.Pages, k.Sync, k.List},
 		{k.Add, k.Edit, k.Import, k.Export},
 		{k.Delete, k.Reveal, k.Filter, k.Back, k.Confirm, k.Quit},
 	}
@@ -109,8 +108,6 @@ type tuiModel struct {
 	help          help.Model
 	keys          keyMap
 	input         textinput.Model
-	bodyWidth     int
-	bodyHeight    int
 	status        string
 	current       string
 	bundle        *ProjectBundle
@@ -165,8 +162,9 @@ func newTUIModel(app *App) tuiModel {
 	tbl.SetStyles(table.DefaultStyles())
 
 	input := textinput.New()
-	input.Prompt = "> "
+	input.Prompt = "key> "
 	input.CharLimit = 8192
+	input.Focus()
 	vp := viewport.New(0, 0)
 
 	m := tuiModel{
@@ -263,6 +261,40 @@ func (m tuiModel) Init() tea.Cmd { return nil }
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer m.relayout()
 
+	// Handle page select mode first
+	if m.mode == modePageSelect {
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			switch keyMsg.String() {
+			case "1":
+				m.page = pageHome
+				m.mode = modeNormal
+				m.input.Prompt = "key> "
+				m.input.SetValue("")
+				m.input.Focus()
+				m.status = "Ready"
+			case "2":
+				m.page = pageProject
+				m.mode = modeNormal
+				m.input.Prompt = "filter> "
+				m.input.SetValue("")
+				m.input.Focus()
+				m.status = "Ready"
+			case "3":
+				m.page = pageSettings
+				m.mode = modeNormal
+				m.input.Blur()
+				m.status = "Ready"
+			case "esc":
+				m.mode = modeNormal
+				m.status = "Ready"
+				if m.page == pageHome || m.page == pageProject {
+					m.input.Focus()
+				}
+			}
+			return m, nil
+		}
+	}
+
 	if m.mode == modeAddKey || m.mode == modeAddValue || m.mode == modeEditValue || m.mode == modeFilter || m.mode == modeImportPath || m.mode == modeExportPath {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
@@ -304,8 +336,17 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.pendingValue = ""
 					m.mode = modeNormal
 					m.input.SetValue("")
-					m.input.Prompt = "> "
-					m.input.Blur()
+					// Reset to appropriate prompt based on page
+					if m.page == pageHome {
+						m.input.Prompt = "key> "
+						m.input.Focus()
+					} else if m.page == pageProject {
+						m.input.Prompt = "filter> "
+						m.input.Focus()
+					} else {
+						m.input.Prompt = "> "
+						m.input.Blur()
+					}
 				case modeEditValue:
 					value := m.input.Value()
 					if m.bundle == nil || m.pendingKey == "" {
@@ -400,12 +441,20 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
-		case "1", "h":
-			m.page = pageHome
-		case "2", "p":
-			m.page = pageProject
-		case "3", "s":
-			m.page = pageSettings
+		case "P":
+			if m.mode == modeNormal {
+				m.mode = modePageSelect
+				m.status = "Select page"
+				m.input.Blur()
+			}
+		case "l":
+			if m.mode == modeNormal && m.page == pageHome {
+				m.page = pageProject
+				m.input.Prompt = "filter> "
+				m.input.SetValue("")
+				m.input.Focus()
+				m.status = "Ready"
+			}
 		case "i":
 			if m.needsInit {
 				if err := m.app.Init("file", ""); err != nil {
@@ -447,6 +496,21 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.status = "Synced"
 				m.load()
 			}
+		case "enter":
+			if m.page == pageHome && m.mode == modeNormal {
+				val := strings.TrimSpace(m.input.Value())
+				if val != "" {
+					if err := m.ensureCurrentBundle(); err != nil {
+						m.status = err.Error()
+						break
+					}
+					m.pendingKey = val
+					m.input.SetValue("")
+					m.input.Prompt = "value> "
+					m.mode = modeAddValue
+					m.status = "Enter value for " + val
+				}
+			}
 		case "a":
 			if m.needsInit {
 				break
@@ -455,11 +519,19 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.status = err.Error()
 				break
 			}
-			m.mode = modeAddKey
-			m.input.Prompt = "key> "
-			m.input.SetValue("")
-			m.input.Focus()
-			m.status = "Enter key name"
+			if m.page == pageProject {
+				// On project page, switch filter input to add mode
+				m.input.Prompt = "key> "
+				m.input.SetValue("")
+				m.input.Focus()
+				m.status = "Enter key name"
+			} else {
+				m.mode = modeAddKey
+				m.input.Prompt = "key> "
+				m.input.SetValue("")
+				m.input.Focus()
+				m.status = "Enter key name"
+			}
 		case "e":
 			if m.page != pageProject || m.bundle == nil {
 				break
@@ -562,49 +634,49 @@ func (m tuiModel) View() string {
 	header := m.renderHeader()
 	if m.needsInit {
 		body := m.styles.Panel.Render("Veil is not initialized.\n\nPress i for file key storage or k for keychain.")
-		actions := m.renderActionBar()
-		return lipgloss.JoinVertical(lipgloss.Left, header, body, actions, m.renderFooter())
+		return lipgloss.JoinVertical(lipgloss.Left, header, body, m.renderFooter())
 	}
-	body := m.viewport.View()
-	if m.page == pageProject {
+
+	var body string
+	switch m.page {
+	case pageHome:
+		body = m.renderHome()
+	case pageProject:
 		body = m.renderProject()
+	case pageSettings:
+		body = m.renderSettings()
 	}
-	if m.mode != modeNormal {
+
+	// Show input panel overlay when in input modes (except on project page with filter)
+	if m.mode != modeNormal && m.mode != modePageSelect && !(m.page == pageProject && m.input.Prompt == "filter> ") {
 		body = m.renderInputPanel()
 	}
 
-	actions := m.renderActionBar()
-	parts := []string{header, body, actions}
-	parts = append(parts, m.renderFooter())
-	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, m.renderFooter())
+}
+
+var inputBoxStyle = lipgloss.NewStyle().
+	Border(lipgloss.RoundedBorder()).
+	BorderForeground(branding.Slate).
+	Padding(0, 1).
+	Width(50)
+
+func (m tuiModel) renderInputBox() string {
+	return inputBoxStyle.Render(m.input.View())
 }
 
 func (m tuiModel) renderHeader() string {
-	logo := branding.Render()
-	if m.page == pageHome && m.width >= 128 {
-		logo = branding.RenderFull()
-	}
-	logo = strings.Trim(logo, "\n")
-
-	tabs := []string{"1 Home", "2 Project", "3 Settings"}
-	for i := range tabs {
-		if page(i) == m.page {
-			tabs[i] = m.styles.Accent.Render(tabs[i])
-		} else {
-			tabs[i] = m.styles.Tabs.Render(tabs[i])
-		}
-	}
-	tabBar := strings.Join(tabs, "  |  ")
-	header := lipgloss.JoinVertical(lipgloss.Left, logo, tabBar)
-	if m.page == pageHome && m.width > 0 {
-		return lipgloss.Place(m.width, lipgloss.Height(header), lipgloss.Center, lipgloss.Top, header)
-	}
-	return header
+	return branding.Render()
 }
 
 func (m tuiModel) renderHome() string {
-	quick := "[a] Add Secret    [S] Sync    [i] Import"
-	last := ""
+	var parts []string
+
+	// Input box
+	parts = append(parts, m.renderInputBox())
+	parts = append(parts, "")
+
+	// Recent secrets (last 3, muted, no label)
 	if m.bundle != nil && len(m.bundle.Secrets) > 0 {
 		recent := append([]Secret(nil), m.bundle.Secrets...)
 		sort.Slice(recent, func(i, j int) bool { return recent[i].UpdatedAt > recent[j].UpdatedAt })
@@ -612,16 +684,14 @@ func (m tuiModel) renderHome() string {
 		if len(recent) < limit {
 			limit = len(recent)
 		}
-		parts := make([]string, 0, limit)
 		for i := 0; i < limit; i++ {
-			parts = append(parts, fmt.Sprintf("%s  %s", recent[i].Key, maskValue(recent[i].Value)))
+			line := fmt.Sprintf("  %s       %s", recent[i].Key, maskValue(recent[i].Value))
+			parts = append(parts, m.styles.Muted.Render(line))
 		}
-		last = strings.Join(parts, "\n")
-	}
-	if last == "" {
-		last = "No recent secrets"
+		parts = append(parts, "")
 	}
 
+	// Sync status (muted)
 	syncStatus := "not linked"
 	if config, err := m.app.LoadConfig(); err == nil {
 		if config.Gist.ID != "" {
@@ -631,46 +701,42 @@ func (m tuiModel) renderHome() string {
 			}
 		}
 	}
+	parts = append(parts, m.styles.Muted.Render("  synced "+syncStatus))
 
-	content := strings.Join([]string{
-		m.styles.Accent.Render("Quick actions"),
-		quick,
-		m.styles.Muted.Render("Last 3 secrets"),
-		m.styles.Muted.Render(last),
-		m.styles.Muted.Render("Sync status: " + syncStatus),
-	}, "\n\n")
-	panel := m.styles.Panel.Render(content)
-	if m.bodyWidth > 0 && m.bodyHeight > 0 {
-		return lipgloss.Place(m.bodyWidth, m.bodyHeight, lipgloss.Center, lipgloss.Top, panel)
-	}
-	return panel
+	return strings.Join(parts, "\n")
 }
 
 func (m tuiModel) renderProject() string {
-	if m.current == "" {
-		return m.styles.Panel.Render("No project selected")
+	var parts []string
+
+	// Filter input box
+	parts = append(parts, m.renderInputBox())
+	parts = append(parts, "")
+
+	// Project info line (muted)
+	if m.current != "" {
+		info := fmt.Sprintf("  Project: %s", m.current)
+		if m.bundle != nil {
+			info += fmt.Sprintf(" · %d secrets", len(m.bundle.Secrets))
+		}
+		parts = append(parts, m.styles.Muted.Render(info))
+		parts = append(parts, "")
 	}
-	meta := fmt.Sprintf("Project: %s", m.current)
-	if m.filterQuery != "" {
-		meta += "   Filter: " + m.filterQuery
-	}
-	if m.bundle != nil {
-		meta += fmt.Sprintf("   Secrets: %d", len(m.bundle.Secrets))
-	}
+
+	// Table
 	body := m.projectTable.View()
-	if m.bundle == nil {
-		body = "No secrets"
+	if m.bundle == nil || len(m.bundle.Secrets) == 0 {
+		body = "  No secrets"
 	}
-	return m.styles.Panel.Render(meta + "\n\n" + body)
+	parts = append(parts, body)
+
+	return strings.Join(parts, "\n")
 }
 
 func (m tuiModel) renderSettings() string {
-	if m.bundle == nil {
-		m.bundle = &ProjectBundle{}
-	}
 	config, err := m.app.LoadConfig()
 	if err != nil {
-		return m.styles.Panel.Render("Failed to load settings: " + err.Error())
+		return "  Failed to load settings: " + err.Error()
 	}
 	gist := "Not linked"
 	if config.Gist.ID != "" {
@@ -681,18 +747,17 @@ func (m tuiModel) renderSettings() string {
 		syncStatus = "never"
 	}
 	content := strings.Join([]string{
-		"GitHub Gist: " + gist,
-		"Last Sync: " + syncStatus,
-		"Machine: " + config.Machine.Name,
-		"Key Storage: " + config.KeyStorage,
-		"Shell Hooks: bash, zsh, fish, powershell (manual setup)",
-		"Export Default: " + config.Prefs.ExportFormat,
+		"  GitHub Gist: " + gist,
+		"  Last Sync: " + syncStatus,
+		"  Machine: " + config.Machine.Name,
+		"  Key Storage: " + config.KeyStorage,
+		"  Export Default: " + config.Prefs.ExportFormat,
 	}, "\n")
-	return m.styles.Panel.Render(content)
+	return content
 }
 
 func runTUI(app *App) error {
-	p := tea.NewProgram(newTUIModel(app), tea.WithAltScreen())
+	p := tea.NewProgram(newTUIModel(app))
 	_, err := p.Run()
 	return err
 }
@@ -712,53 +777,41 @@ func (m *tuiModel) relayout() {
 	if m.width <= 0 || m.height <= 0 {
 		return
 	}
-	headerH := lipgloss.Height(m.renderHeader())
-	actionH := lipgloss.Height(m.renderActionBar())
-	footerH := lipgloss.Height(m.renderFooter())
-	m.bodyWidth = max(40, m.width)
-	m.bodyHeight = max(8, m.height-headerH-actionH-footerH)
-	m.viewport.Width = m.bodyWidth
-	m.viewport.Height = m.bodyHeight
-	m.projectList.SetSize(max(28, m.bodyWidth/3), max(10, m.bodyHeight-2))
-	m.projectTable.SetHeight(max(6, m.bodyHeight-4))
-	m.projectTable.SetWidth(max(60, m.bodyWidth-6))
-	m.setViewportContent()
+	// Only adjust table dimensions based on available width
+	m.projectTable.SetWidth(max(60, m.width-6))
 }
 
 func (m *tuiModel) setViewportContent() {
-	var content string
-	switch m.page {
-	case pageHome:
-		content = m.renderHome()
-	case pageSettings:
-		content = m.renderSettings()
-	default:
-		content = ""
-	}
-	m.viewport.SetContent(content)
+	// No longer needed - content rendered directly
 }
 
 func (m tuiModel) renderFooter() string {
-	status := m.styles.Muted.Render(m.status)
-	helpView := m.help.View(m.keys)
-	return lipgloss.JoinVertical(lipgloss.Left, status, helpView)
-}
+	var parts []string
 
-func (m tuiModel) renderActionBar() string {
-	var actions string
-	if m.mode != modeNormal {
-		actions = "[enter] Confirm  [esc] Cancel"
+	// Status line (only when not Ready)
+	if m.status != "Ready" {
+		parts = append(parts, m.styles.Muted.Render(m.status))
+	}
+
+	// Help bar - context sensitive
+	var help string
+	if m.mode == modePageSelect {
+		help = "[1] home  [2] project  [3] settings  [esc] cancel"
+	} else if m.mode != modeNormal {
+		help = "[enter] confirm  [esc] cancel"
 	} else {
 		switch m.page {
 		case pageHome:
-			actions = "[a] Add  [i] Import  [S] Sync  [2] Project  [3] Settings  [q] Quit"
+			help = "[a] add  [i] import  [S] sync  [l] list  [P] pages  [q] quit"
 		case pageProject:
-			actions = "[a] Add  [e] Edit  [d] Delete  [r] Reveal  [/] Filter  [i] Import  [x] Export  [S] Sync  [1] Home"
+			help = "[a] add  [e] edit  [d] delete  [r] reveal  [/] filter  [i] import  [x] export  [S] sync  [P] pages  [q] quit"
 		case pageSettings:
-			actions = "[S] Sync  [1] Home  [2] Project  [q] Quit"
+			help = "[S] sync  [P] pages  [q] quit"
 		}
 	}
-	return m.styles.Accent.Render(actions)
+	parts = append(parts, m.styles.Muted.Render(help))
+
+	return strings.Join(parts, "\n")
 }
 
 func (m tuiModel) renderInputPanel() string {
@@ -777,11 +830,7 @@ func (m tuiModel) renderInputPanel() string {
 	case modeExportPath:
 		title = "Export"
 	}
-	panel := m.styles.Panel.Render(m.styles.Accent.Render(title) + "\n\n" + m.input.View())
-	if m.bodyWidth > 0 && m.bodyHeight > 0 {
-		return lipgloss.Place(m.bodyWidth, m.bodyHeight, lipgloss.Center, lipgloss.Center, panel)
-	}
-	return panel
+	return m.styles.Panel.Render(m.styles.Accent.Render(title) + "\n\n" + m.input.View())
 }
 
 func (m *tuiModel) ensureCurrentBundle() error {
