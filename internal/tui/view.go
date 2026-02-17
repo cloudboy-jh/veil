@@ -4,43 +4,33 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/charmbracelet/lipgloss"
-	"github.com/jackhorton/veil/branding"
 )
 
 func (m model) View() string {
-	header := branding.Render()
-	if m.needsInit {
-		body := m.styles.Panel.Render("Veil is not initialized.\n\nPress i for file key storage or k for keychain.")
-		return lipgloss.JoinVertical(lipgloss.Left, header, body, m.renderFooter())
-	}
-
 	var body string
-	switch m.page {
-	case pageHome:
-		body = m.renderHome()
-	case pageProject:
-		body = m.renderProject()
-	case pageSettings:
-		body = m.renderSettings()
+
+	if m.needsInit {
+		body = m.styles.Panel.Render("Veil is not initialized.\n\nPress i for file key storage or k for keychain.")
+	} else {
+		switch m.page {
+		case pageHome:
+			body = m.renderHome()
+		case pageProject:
+			body = m.renderProject()
+		case pageSettings:
+			body = m.renderSettings()
+		}
 	}
 
 	if m.mode != modeNormal && m.mode != modePageSelect && !(m.page == pageProject && m.input.Prompt == "filter> ") {
 		body = m.renderInputPanel()
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, m.renderFooter())
-}
-
-func (m model) renderInputBox() string {
-	return inputBoxStyle.Render(m.input.View())
+	return m.renderFrame(body)
 }
 
 func (m model) renderHome() string {
 	var parts []string
-	parts = append(parts, m.renderInputBox())
-	parts = append(parts, "")
 
 	if m.bundle != nil && len(m.bundle.Secrets) > 0 {
 		recent := append([]Secret(nil), m.bundle.Secrets...)
@@ -80,8 +70,6 @@ func (m model) renderHome() string {
 
 func (m model) renderProject() string {
 	var parts []string
-	parts = append(parts, m.renderInputBox())
-	parts = append(parts, "")
 
 	if m.current != "" {
 		info := fmt.Sprintf("  Project: %s", m.current)
@@ -125,12 +113,6 @@ func (m model) renderSettings() string {
 }
 
 func (m model) renderFooter() string {
-	var parts []string
-
-	if m.status != "Ready" {
-		parts = append(parts, m.styles.Muted.Render(m.status))
-	}
-
 	var help string
 	if m.mode == modePageSelect {
 		help = "[1] home  [2] project  [3] settings  [esc] cancel"
@@ -146,7 +128,8 @@ func (m model) renderFooter() string {
 			help = "[S] sync  [P] pages  [q] quit"
 		}
 	}
-	parts = append(parts, m.styles.Muted.Render(help))
-
-	return strings.Join(parts, "\n")
+	if m.status != "" && m.status != "Ready" {
+		help = m.status + " | " + help
+	}
+	return m.styles.Muted.Render(help)
 }

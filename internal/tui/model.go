@@ -180,7 +180,10 @@ func (m model) renderInputPanel() string {
 	case modeExportPath:
 		title = "Export"
 	}
-	return m.styles.Panel.Render(m.styles.Accent.Render(title) + "\n\n" + m.input.View())
+	content := m.styles.Panel.
+		Width(m.innerWidth()).
+		Render(m.styles.Accent.Render(title) + "\n\n" + m.input.View())
+	return m.fitHeight(content, m.contentHeight())
 }
 
 func max(a, b int) int {
