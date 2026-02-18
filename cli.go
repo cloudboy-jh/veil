@@ -11,48 +11,51 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	appcore "github.com/jackhorton/veil/internal/app"
+	"github.com/jackhorton/veil/internal/tui"
 )
 
 func runCLI(args []string) error {
-	app, err := NewApp()
+	application, err := appcore.NewApp()
 	if err != nil {
 		return err
 	}
 	if len(args) == 0 {
-		return runTUI(app)
+		return tui.RunTUI(application)
 	}
 	switch args[0] {
 	case "help", "-h", "--help":
 		printHelp()
 		return nil
 	case "init":
-		return cmdInit(app, args[1:])
+		return cmdInit(application, args[1:])
 	case "set":
-		return cmdSet(app, args[1:])
+		return cmdSet(application, args[1:])
 	case "get":
-		return cmdGet(app, args[1:])
+		return cmdGet(application, args[1:])
 	case "import":
-		return cmdImport(app, args[1:])
+		return cmdImport(application, args[1:])
 	case "export":
-		return cmdExport(app, args[1:])
+		return cmdExport(application, args[1:])
 	case "run":
-		return cmdRun(app, args[1:])
+		return cmdRun(application, args[1:])
 	case "sync":
-		return cmdSync(app, args[1:])
+		return cmdSync(application, args[1:])
 	case "list":
-		return cmdList(app, args[1:])
+		return cmdList(application, args[1:])
 	case "ls":
-		return cmdLS(app, args[1:])
+		return cmdLS(application, args[1:])
 	case "rm":
-		return cmdRM(app, args[1:])
+		return cmdRM(application, args[1:])
 	case "link":
-		return cmdLink(app, args[1:])
+		return cmdLink(application, args[1:])
 	default:
 		return fmt.Errorf("unknown command %q (run `veil --help`)", args[0])
 	}
 }
 
-func cmdInit(app *App, args []string) error {
+func cmdInit(app *appcore.App, args []string) error {
 	args = reorderFlags(args, map[string]bool{"--key-storage": true, "--machine-name": true, "--link": false})
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
@@ -74,7 +77,7 @@ func cmdInit(app *App, args []string) error {
 	return nil
 }
 
-func cmdSet(app *App, args []string) error {
+func cmdSet(app *appcore.App, args []string) error {
 	args = reorderFlags(args, map[string]bool{"-p": true, "--group": true})
 	fs := flag.NewFlagSet("set", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
@@ -97,7 +100,7 @@ func cmdSet(app *App, args []string) error {
 	}
 	key := remaining[0]
 	value := strings.Join(remaining[1:], " ")
-	created := upsertSecret(bundle, key, value, *group)
+	created := appcore.UpsertSecret(bundle, key, value, *group)
 	if err := app.SaveProject(bundle); err != nil {
 		return err
 	}
@@ -109,7 +112,7 @@ func cmdSet(app *App, args []string) error {
 	return nil
 }
 
-func cmdGet(app *App, args []string) error {
+func cmdGet(app *appcore.App, args []string) error {
 	args = reorderFlags(args, map[string]bool{"-p": true})
 	fs := flag.NewFlagSet("get", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
@@ -129,7 +132,7 @@ func cmdGet(app *App, args []string) error {
 	if err != nil {
 		return err
 	}
-	secret, ok := getSecret(bundle, remaining[0])
+	secret, ok := appcore.GetSecret(bundle, remaining[0])
 	if !ok {
 		return fmt.Errorf("key %q not found in project %q", remaining[0], project)
 	}
@@ -137,7 +140,7 @@ func cmdGet(app *App, args []string) error {
 	return nil
 }
 
-func cmdImport(app *App, args []string) error {
+func cmdImport(app *appcore.App, args []string) error {
 	args = reorderFlags(args, map[string]bool{"-p": true, "--skip-existing": false})
 	fs := flag.NewFlagSet("import", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
@@ -160,7 +163,7 @@ func cmdImport(app *App, args []string) error {
 	if err != nil {
 		return err
 	}
-	pairs, err := parseEnvContent(string(raw))
+	pairs, err := appcore.ParseEnvContent(string(raw))
 	if err != nil {
 		return err
 	}
@@ -176,11 +179,11 @@ func cmdImport(app *App, args []string) error {
 	updated := 0
 	skipped := 0
 	for _, pair := range pairs {
-		if _, exists := getSecret(bundle, pair.Key); exists && *skipExisting {
+		if _, exists := appcore.GetSecret(bundle, pair.Key); exists && *skipExisting {
 			skipped++
 			continue
 		}
-		created := upsertSecret(bundle, pair.Key, pair.Value, "")
+		created := appcore.UpsertSecret(bundle, pair.Key, pair.Value, "")
 		if created {
 			added++
 		} else {
@@ -194,7 +197,7 @@ func cmdImport(app *App, args []string) error {
 	return nil
 }
 
-func cmdExport(app *App, args []string) error {
+func cmdExport(app *appcore.App, args []string) error {
 	args = reorderFlags(args, map[string]bool{"--format": true, "--out": true, "-p": true})
 	fs := flag.NewFlagSet("export", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
@@ -222,7 +225,7 @@ func cmdExport(app *App, args []string) error {
 	}
 	selectedFormat := strings.ToLower(strings.TrimSpace(*format))
 	if selectedFormat == "" {
-		selectedFormat = app.config.Prefs.ExportFormat
+		selectedFormat = app.ExportFormatPreference()
 	}
 	if selectedFormat == "" {
 		selectedFormat = "env"
@@ -230,9 +233,9 @@ func cmdExport(app *App, args []string) error {
 	var rendered string
 	switch selectedFormat {
 	case "env":
-		rendered = renderEnv(bundle)
+		rendered = appcore.RenderEnv(bundle)
 	case "json":
-		rendered, err = renderProjectJSON(bundle)
+		rendered, err = appcore.RenderProjectJSON(bundle)
 		if err != nil {
 			return err
 		}
@@ -243,7 +246,11 @@ func cmdExport(app *App, args []string) error {
 		fmt.Print(rendered)
 		return nil
 	}
-	abs := normalizePath(*outPath)
+	abs, err := filepath.Abs(*outPath)
+	if err != nil {
+		return err
+	}
+	abs = filepath.Clean(abs)
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return err
 	}
@@ -254,7 +261,7 @@ func cmdExport(app *App, args []string) error {
 	return nil
 }
 
-func cmdRun(app *App, args []string) error {
+func cmdRun(app *appcore.App, args []string) error {
 	idx := -1
 	for i, arg := range args {
 		if arg == "--" {
@@ -295,7 +302,7 @@ func cmdRun(app *App, args []string) error {
 	return cmd.Run()
 }
 
-func cmdSync(app *App, args []string) error {
+func cmdSync(app *appcore.App, args []string) error {
 	args = reorderFlags(args, map[string]bool{"--token": true})
 	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
@@ -310,7 +317,7 @@ func cmdSync(app *App, args []string) error {
 	return nil
 }
 
-func cmdList(app *App, args []string) error {
+func cmdList(app *appcore.App, args []string) error {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
 	if err := fs.Parse(args); err != nil {
@@ -331,7 +338,7 @@ func cmdList(app *App, args []string) error {
 	return nil
 }
 
-func cmdLS(app *App, args []string) error {
+func cmdLS(app *appcore.App, args []string) error {
 	args = reorderFlags(args, map[string]bool{"-p": true})
 	fs := flag.NewFlagSet("ls", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
@@ -356,7 +363,7 @@ func cmdLS(app *App, args []string) error {
 		fmt.Printf("No secrets in %s\n", resolvedName)
 		return nil
 	}
-	sorted := append([]Secret(nil), bundle.Secrets...)
+	sorted := append([]appcore.Secret(nil), bundle.Secrets...)
 	sort.Slice(sorted, func(i, j int) bool {
 		if sorted[i].Group == sorted[j].Group {
 			return sorted[i].Key < sorted[j].Key
@@ -369,12 +376,12 @@ func cmdLS(app *App, args []string) error {
 			currentGroup = secret.Group
 			fmt.Printf("[%s]\n", currentGroup)
 		}
-		fmt.Printf("  %s=%s\n", secret.Key, maskValue(secret.Value))
+		fmt.Printf("  %s=%s\n", secret.Key, appcore.MaskValue(secret.Value))
 	}
 	return nil
 }
 
-func cmdRM(app *App, args []string) error {
+func cmdRM(app *appcore.App, args []string) error {
 	args = reorderFlags(args, map[string]bool{"-p": true, "-y": false})
 	fs := flag.NewFlagSet("rm", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
@@ -396,7 +403,7 @@ func cmdRM(app *App, args []string) error {
 	if err != nil {
 		return err
 	}
-	if _, exists := getSecret(bundle, key); !exists {
+	if _, exists := appcore.GetSecret(bundle, key); !exists {
 		return fmt.Errorf("key %q not found in %q", key, project)
 	}
 	if !*yes {
@@ -407,7 +414,7 @@ func cmdRM(app *App, args []string) error {
 			return nil
 		}
 	}
-	if !removeSecret(bundle, key) {
+	if !appcore.RemoveSecret(bundle, key) {
 		return fmt.Errorf("key %q not found in %q", key, project)
 	}
 	if err := app.SaveProject(bundle); err != nil {
@@ -417,7 +424,7 @@ func cmdRM(app *App, args []string) error {
 	return nil
 }
 
-func cmdLink(app *App, args []string) error {
+func cmdLink(app *appcore.App, args []string) error {
 	args = reorderFlags(args, map[string]bool{"--token": true, "--gist": true})
 	fs := flag.NewFlagSet("link", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
@@ -432,7 +439,7 @@ func cmdLink(app *App, args []string) error {
 	if err := app.Link(*token, *gistID); err != nil {
 		return err
 	}
-	fmt.Printf("Linked gist %s\n", app.config.Gist.ID)
+	fmt.Printf("Linked gist %s\n", app.LinkedGistID())
 	return nil
 }
 

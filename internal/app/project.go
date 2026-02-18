@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"encoding/json"
@@ -222,7 +222,7 @@ func detectGroup(key string) string {
 	return "General"
 }
 
-func upsertSecret(bundle *ProjectBundle, key, value, group string) (created bool) {
+func UpsertSecret(bundle *ProjectBundle, key, value, group string) (created bool) {
 	now := nowRFC3339()
 	for i := range bundle.Secrets {
 		if bundle.Secrets[i].Key == key {
@@ -247,7 +247,7 @@ func upsertSecret(bundle *ProjectBundle, key, value, group string) (created bool
 	return true
 }
 
-func removeSecret(bundle *ProjectBundle, key string) bool {
+func RemoveSecret(bundle *ProjectBundle, key string) bool {
 	for i := range bundle.Secrets {
 		if bundle.Secrets[i].Key == key {
 			bundle.Secrets = append(bundle.Secrets[:i], bundle.Secrets[i+1:]...)
@@ -257,7 +257,7 @@ func removeSecret(bundle *ProjectBundle, key string) bool {
 	return false
 }
 
-func getSecret(bundle *ProjectBundle, key string) (Secret, bool) {
+func GetSecret(bundle *ProjectBundle, key string) (Secret, bool) {
 	for _, secret := range bundle.Secrets {
 		if secret.Key == key {
 			return secret, true
@@ -266,7 +266,7 @@ func getSecret(bundle *ProjectBundle, key string) (Secret, bool) {
 	return Secret{}, false
 }
 
-func maskValue(value string) string {
+func MaskValue(value string) string {
 	if value == "" {
 		return ""
 	}

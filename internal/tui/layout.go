@@ -4,20 +4,22 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/jackhorton/veil/branding"
 )
 
 const (
-	headerHeight      = 5
+	headerHeight      = 6
 	separatorCount    = 2
 	separatorHeight   = 1
-	footerHeight      = 1
+	footerHeight      = 2
 	inputHeight       = 1
-	verticalChrome    = 2
-	horizontalChrome  = 2
+	verticalChrome    = 0
+	horizontalChrome  = 0
+	minFrameWidth     = 58
+	maxFrameWidth     = 104
 	minReadableWidth  = 40
 	maxReadableWidth  = 120
 	minTableHeight    = 3
+	maxContentHeight  = 20
 	projectInfoHeight = 4
 )
 
@@ -30,6 +32,7 @@ func (m *model) relayout() {
 	tableHeight := max(minTableHeight, m.contentHeight()-projectInfoHeight)
 	m.projectTable.SetWidth(tableWidth)
 	m.projectTable.SetHeight(tableHeight)
+	m.resizeProjectColumns(tableWidth)
 }
 
 func (m model) renderFrame(content string) string {
@@ -37,49 +40,62 @@ func (m model) renderFrame(content string) string {
 		return ""
 	}
 
-	frameInnerWidth := m.frameInnerWidth()
+	frameOuterWidth := m.frameWidth()
+	frameInnerWidth := max(1, frameOuterWidth-horizontalChrome)
 	contentWidth := m.innerWidth()
+	frameHeight := headerHeight + (separatorCount * separatorHeight) + m.contentHeight() + footerHeight + inputHeight
+	if m.height > 0 && frameHeight > m.height {
+		frameHeight = m.height
+	}
+	innerHeight := max(1, frameHeight-verticalChrome)
 
-	header := m.placeSection(m.frameHeader(contentWidth), headerHeight, frameInnerWidth)
+	header := m.placeSection(m.renderHeader(contentWidth), headerHeight, frameInnerWidth)
 	sep := m.placeSection(m.frameSeparator(contentWidth), separatorHeight, frameInnerWidth)
-	body := m.placeSection(m.fitHeight(content, m.contentHeight()), m.contentHeight(), frameInnerWidth)
-	footer := m.placeSection(m.renderFooterLine(contentWidth), footerHeight, frameInnerWidth)
+	body := m.placeSection(m.styles.Body.Width(frameInnerWidth).Render(m.fitHeight(content, m.contentHeight())), m.contentHeight(), frameInnerWidth)
+	footer := m.placeSection(m.frameFooter(contentWidth), footerHeight, frameInnerWidth)
 	input := m.placeSection(m.frameInput(contentWidth), inputHeight, frameInnerWidth)
 
 	inner := lipgloss.JoinVertical(lipgloss.Left, header, sep, body, sep, footer, input)
+	inner = m.styles.Surface.Width(frameInnerWidth).Height(innerHeight).Render(inner)
 
-	frame := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(branding.Slate).
+	frame := m.styles.Frame.
 		Width(frameInnerWidth).
-		Height(max(1, m.height-verticalChrome)).
+		Height(innerHeight).
 		Render(inner)
 
-	return lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, frame)
-}
-
-func (m model) frameHeader(width int) string {
-	logo := strings.Split(branding.LogoStyle.Render(branding.WordmarkSmall), "\n")
-	if len(logo) > 0 && logo[len(logo)-1] == "" {
-		logo = logo[:len(logo)-1]
-	}
-
-	tagline := branding.TaglineStyle.Render("encrypted secrets for developers") + "    " + m.styles.Muted.Render("> "+m.pageLabel())
-	lines := append(logo, tagline)
-	return lipgloss.NewStyle().Width(width).Render(m.fitHeight(strings.Join(lines, "\n"), headerHeight))
+	placed := lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, frame)
+	return m.styles.AppBackground.Width(m.width).Height(m.height).Render(placed)
 }
 
 func (m model) frameSeparator(width int) string {
-	return strings.Repeat("─", max(1, width))
+	return m.styles.Muted.Width(width).Render(strings.Repeat("─", max(1, width)))
 }
 
 func (m model) frameInput(width int) string {
-	return lipgloss.NewStyle().Width(width).Render(m.input.View())
+	if m.hasActiveModal() {
+		return m.styles.InputBar.Width(width).Render("")
+	}
+	return m.styles.InputBar.Width(width).Render(m.input.View())
 }
 
-func (m model) renderFooterLine(width int) string {
-	footer := m.renderFooter()
-	return lipgloss.NewStyle().Width(width).Render(footer)
+func (m model) frameFooter(width int) string {
+	status := m.renderFooterStatus(width)
+	hints := m.renderFooterHints(width)
+	return lipgloss.JoinVertical(lipgloss.Left, status, hints)
+}
+
+func (m model) frameWidth() int {
+	w := m.width
+	if w < 1 {
+		return 1
+	}
+	if w > maxFrameWidth {
+		return maxFrameWidth
+	}
+	if w < minFrameWidth {
+		return w
+	}
+	return w
 }
 
 func (m model) contentHeight() int {
@@ -87,11 +103,14 @@ func (m model) contentHeight() int {
 	if h < 0 {
 		return 0
 	}
+	if h > maxContentHeight {
+		return maxContentHeight
+	}
 	return h
 }
 
 func (m model) frameInnerWidth() int {
-	w := m.width - horizontalChrome
+	w := m.frameWidth() - horizontalChrome
 	if w < 1 {
 		return 1
 	}

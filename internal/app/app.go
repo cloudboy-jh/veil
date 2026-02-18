@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"crypto/rand"
@@ -269,4 +269,18 @@ func uniqueStrings(values []string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func (a *App) ExportFormatPreference() string {
+	if _, err := a.LoadConfig(); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(a.config.Prefs.ExportFormat)
+}
+
+func (a *App) LinkedGistID() string {
+	if _, err := a.LoadConfig(); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(a.config.Gist.ID)
 }

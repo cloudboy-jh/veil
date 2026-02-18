@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"bufio"
@@ -9,14 +9,14 @@ import (
 	"strings"
 )
 
-type envPair struct {
+type EnvPair struct {
 	Key   string
 	Value string
 }
 
-func parseEnvContent(content string) ([]envPair, error) {
+func ParseEnvContent(content string) ([]EnvPair, error) {
 	scanner := bufio.NewScanner(strings.NewReader(content))
-	out := make([]envPair, 0)
+	out := make([]EnvPair, 0)
 	lineNum := 0
 	for scanner.Scan() {
 		lineNum++
@@ -37,7 +37,7 @@ func parseEnvContent(content string) ([]envPair, error) {
 		if unquoted, ok := unquoteEnv(value); ok {
 			value = unquoted
 		}
-		out = append(out, envPair{Key: key, Value: value})
+		out = append(out, EnvPair{Key: key, Value: value})
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func unquoteEnv(value string) (string, bool) {
 	return value, false
 }
 
-func renderEnv(bundle *ProjectBundle) string {
+func RenderEnv(bundle *ProjectBundle) string {
 	var b bytes.Buffer
 	sorted := make([]Secret, len(bundle.Secrets))
 	copy(sorted, bundle.Secrets)
@@ -83,7 +83,7 @@ func renderEnv(bundle *ProjectBundle) string {
 	return b.String()
 }
 
-func renderProjectJSON(bundle *ProjectBundle) (string, error) {
+func RenderProjectJSON(bundle *ProjectBundle) (string, error) {
 	b, err := json.MarshalIndent(bundle, "", "  ")
 	if err != nil {
 		return "", err

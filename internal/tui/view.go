@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 func (m model) View() string {
@@ -22,11 +24,34 @@ func (m model) View() string {
 		}
 	}
 
-	if m.mode != modeNormal && m.mode != modePageSelect && !(m.page == pageProject && m.input.Prompt == "filter> ") {
-		body = m.renderInputPanel()
+	if m.hasActiveModal() {
+		body = m.renderModalOverlay(body)
 	}
 
 	return m.renderFrame(body)
+}
+
+func (m model) renderModalOverlay(baseContent string) string {
+	bodyWidth := m.innerWidth()
+	bodyHeight := m.contentHeight()
+	if bodyWidth <= 0 || bodyHeight <= 0 {
+		return m.fitHeight(baseContent, bodyHeight)
+	}
+
+	base := m.styles.Body.Width(bodyWidth).Height(bodyHeight).Render(m.fitHeight(baseContent, bodyHeight))
+
+	modalBody := m.renderInputPanel()
+	modalWidth := bodyWidth - 6
+	if modalWidth < 42 {
+		modalWidth = bodyWidth
+	}
+	if modalWidth > 84 {
+		modalWidth = 84
+	}
+	modal := m.renderModalShell(modalBody, modalWidth)
+	_ = base
+	canvas := lipgloss.Place(bodyWidth, bodyHeight, lipgloss.Center, lipgloss.Center, modal)
+	return m.styles.ModalBackdrop.Width(bodyWidth).Height(bodyHeight).Render(canvas)
 }
 
 func (m model) renderHome() string {
@@ -59,13 +84,14 @@ func (m model) renderHome() string {
 
 	content := strings.Join(parts, "\n")
 	panelWidth := 72
-	if m.width > 0 {
-		panelWidth = max(56, m.width-6)
+	if m.innerWidth() > 0 {
+		panelWidth = max(56, m.innerWidth()-2)
 		if panelWidth > 96 {
 			panelWidth = 96
 		}
 	}
-	return m.styles.Panel.Width(panelWidth).Render(content)
+	title := m.renderSectionTitle("Overview", panelWidth-4)
+	return m.styles.Panel.Width(panelWidth).Render(title + "\n\n" + content)
 }
 
 func (m model) renderProject() string {
@@ -84,7 +110,7 @@ func (m model) renderProject() string {
 	if m.bundle == nil || len(m.bundle.Secrets) == 0 {
 		body = "  No secrets"
 	}
-	parts = append(parts, body)
+	parts = append(parts, m.renderSectionTitle("Secrets", m.innerWidth()), body)
 
 	return strings.Join(parts, "\n")
 }
@@ -103,13 +129,14 @@ func (m model) renderSettings() string {
 		syncStatus = "never"
 	}
 	content := strings.Join([]string{
+		m.renderSectionTitle("Configuration", m.innerWidth()),
 		"  GitHub Gist: " + gist,
 		"  Last Sync: " + syncStatus,
 		"  Machine: " + settings.MachineName,
 		"  Key Storage: " + settings.KeyStorage,
 		"  Export Default: " + settings.ExportFormat,
 	}, "\n")
-	return content
+	return m.styles.Panel.Width(max(48, m.innerWidth()-2)).Render(content)
 }
 
 func (m model) renderFooter() string {
@@ -128,8 +155,5 @@ func (m model) renderFooter() string {
 			help = "[S] sync  [P] pages  [q] quit"
 		}
 	}
-	if m.status != "" && m.status != "Ready" {
-		help = m.status + " | " + help
-	}
-	return m.styles.Muted.Render(help)
+	return help
 }

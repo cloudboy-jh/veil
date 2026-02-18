@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type page int
@@ -59,7 +60,6 @@ func newModel(svc Service) model {
 		{Title: "Value", Width: 40},
 	}
 	tbl := table.New(table.WithColumns(columns), table.WithRows([]table.Row{}), table.WithFocused(true), table.WithHeight(12))
-	tbl.SetStyles(table.DefaultStyles())
 
 	input := textinput.New()
 	input.Prompt = "key=value> "
@@ -75,8 +75,28 @@ func newModel(svc Service) model {
 		status:       "Ready",
 		styles:       newStyles(),
 	}
+	m.projectTable.SetStyles(m.tableStyles())
 	m.load()
 	return m
+}
+
+func (m model) tableStyles() table.Styles {
+	s := table.DefaultStyles()
+	bg := m.styles.Background
+	s.Header = s.Header.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("#9AA8C7")).
+		Foreground(lipgloss.Color("#DCE5FF")).
+		Background(bg).
+		Bold(true)
+	s.Selected = s.Selected.
+		Foreground(lipgloss.Color("#F4F7FF")).
+		Background(lipgloss.Color("#4A5572")).
+		Bold(true)
+	s.Cell = s.Cell.
+		Foreground(lipgloss.Color("#D1DBF4")).
+		Background(bg)
+	return s
 }
 
 func (m *model) load() {
@@ -165,25 +185,52 @@ func (m *model) ensureCurrentBundle() error {
 }
 
 func (m model) renderInputPanel() string {
-	title := "Input"
-	switch m.mode {
-	case modeAddKey:
-		title = "Add Secret"
-	case modeAddValue:
-		title = "Add Secret Value"
-	case modeEditValue:
-		title = "Edit Secret Value"
-	case modeFilter:
-		title = "Filter"
-	case modeImportPath:
-		title = "Import .env"
-	case modeExportPath:
-		title = "Export"
+	modal, ok := m.currentModal()
+	if !ok {
+		return ""
 	}
-	content := m.styles.Panel.
-		Width(m.innerWidth()).
-		Render(m.styles.Accent.Render(title) + "\n\n" + m.input.View())
-	return m.fitHeight(content, m.contentHeight())
+	return m.renderInputBlock(modal.Title, modal.Detail, m.input.View())
+}
+
+func (m *model) resizeProjectColumns(tableWidth int) {
+	if tableWidth <= 0 {
+		return
+	}
+
+	available := max(24, tableWidth-4)
+	groupWidth := 10
+	keyWidth := 18
+	valueWidth := 16
+	baseTotal := groupWidth + keyWidth + valueWidth
+
+	if available > baseTotal {
+		extra := available - baseTotal
+		keyExtra := extra * 55 / 100
+		valueExtra := extra * 35 / 100
+		groupExtra := extra - keyExtra - valueExtra
+		groupWidth += groupExtra
+		keyWidth += keyExtra
+		valueWidth += valueExtra
+	} else if available < baseTotal {
+		groupWidth = max(8, available/5)
+		remaining := max(12, available-groupWidth)
+		keyWidth = max(12, remaining/2)
+		valueWidth = max(8, available-groupWidth-keyWidth)
+		if groupWidth+keyWidth+valueWidth > available {
+			over := groupWidth + keyWidth + valueWidth - available
+			if keyWidth-over >= 12 {
+				keyWidth -= over
+			} else {
+				valueWidth = max(8, valueWidth-over)
+			}
+		}
+	}
+
+	m.projectTable.SetColumns([]table.Column{
+		{Title: "Group", Width: groupWidth},
+		{Title: "Key", Width: keyWidth},
+		{Title: "Value", Width: valueWidth},
+	})
 }
 
 func max(a, b int) int {
